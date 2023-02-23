@@ -45,7 +45,7 @@ def download_and_upload(**kwargs):
   try:
     exec_shell(
       f"curl --user {kwargs.get('username')}:{kwargs.get('password')} -OLJSk -C - --retry 5 {kwargs.get('url')}",
-      kwargs.get('workdir'), display=True)
+      kwargs.get('workdir'))
     kwargs.get('aliyun_oss').upload_file(kwargs.get('source'), kwargs.get('target'))
     print(f"upload oss, file path: {kwargs.get('target')}")
     return True
