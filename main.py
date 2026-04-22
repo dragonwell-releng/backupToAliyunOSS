@@ -13,7 +13,6 @@ def main(jobs_map, aliyun_oss, jenkins):
   try:
     create_directory(workdir)
     jobs_list = sorted(jobs_map.items(), key=lambda key: key, reverse=True)
-    prefix_path = ''
     thread_pool = MultiThread(10)  # excessive concurrency may cause download failure
     for depth, job in jobs_list:
       if depth == 0:  # analysis project needn't be analyzed
@@ -21,17 +20,24 @@ def main(jobs_map, aliyun_oss, jenkins):
         continue
       for job_name, build_numbers in job.items():
         build_number = build_numbers[0]
-        prefix_path += f"{job_name.split('/')[-1]}/{build_number}/"
         if depth == 1:
-          for artifact_basename, artifact_path in jenkins.get_build_artifacts(job_name, build_number):
+          artifacts = jenkins.get_build_artifacts(job_name, build_number)
+          for artifact_basename, artifact_path in artifacts:
+            if not artifact_basename.endswith('.tap'):
+              continue
+            job_url = jenkins.get_job_url(job_name)
+            download_url = f'{job_url}/{build_number}/artifact/{artifact_path}'
+            filename = artifact_basename.split('/')[-1]
+            source = f"{workdir}/{filename}"
+            target = filename
             thread_pool.run(download_and_upload,
                             username=jenkins.username,
                             password=jenkins.password,
-                            url=f'{jenkins.get_job_url(job_name)}/{build_number}/artifact/{artifact_path}',
+                            url=download_url,
                             workdir=workdir,
                             aliyun_oss=aliyun_oss,
-                            source=f"{workdir}/{artifact_basename.split('/')[-1]}",
-                            target=f"{prefix_path}{artifact_basename.split('/')[-1]}")
+                            source=source,
+                            target=target)
     thread_pool.join()
     if not thread_pool.res:
       return False
@@ -43,11 +49,20 @@ def main(jobs_map, aliyun_oss, jenkins):
 
 def download_and_upload(**kwargs):
   try:
-    exec_shell(
-      f"curl --user {kwargs.get('username')}:{kwargs.get('password')} -OLJSk -C - --retry 5 {kwargs.get('url')}",
-      kwargs.get('workdir'))
-    kwargs.get('aliyun_oss').upload_file(kwargs.get('source'), kwargs.get('target'))
-    print(f"upload oss, file path: {kwargs.get('target')}")
+    curl_cmd = f"curl --user {kwargs.get('username')}:{kwargs.get('password')} -OLJSk --retry 5 {kwargs.get('url')}"
+    out, err, retc = exec_shell(curl_cmd, kwargs.get('workdir'))
+    if retc != 0:
+      print(f"curl failed: {err}")
+      return False
+    aliyun_oss = kwargs.get('aliyun_oss')
+    target = kwargs.get('target')
+    etag_before = aliyun_oss.get_object_etag(target)
+    aliyun_oss.upload_file(kwargs.get('source'), target)
+    etag_after = aliyun_oss.get_object_etag(target)
+    if etag_before == etag_after:
+      print(f"upload oss warning: file not changed after upload, path: {target}")
+    else:
+      print(f"upload oss, file path: {target}")
     return True
   except Exception as e:
     print(e)

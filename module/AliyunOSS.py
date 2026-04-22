@@ -39,6 +39,14 @@ class AliyunOSS(object):
     bucket = self.get_bucket(bucket_name, endpoint) if bucket_name else self.bucket
     return [obj for obj in islice(oss2.ObjectIterator(bucket), max_num)]
 
+  def get_object_etag(self, target, bucket_name='', endpoint='http://oss-cn-hangzhou.aliyuncs.com'):
+    bucket = self.get_bucket(bucket_name, endpoint) if bucket_name else self.bucket
+    try:
+      meta = bucket.get_object_meta(target)
+      return meta.headers.get('ETag', '')
+    except Exception:
+      return ''
+
   def remove_objects(self, bucket_name, path, prefix='', endpoint='http://oss-cn-hangzhou.aliyuncs.com'):
     bucket = self.get_bucket(bucket_name, endpoint) if bucket_name else self.bucket
     if not prefix:
