@@ -29,7 +29,7 @@ def main(jobs_map, aliyun_oss, jenkins):
             download_url = f'{job_url}/{build_number}/artifact/{artifact_path}'
             filename = artifact_basename.split('/')[-1]
             source = f"{workdir}/{filename}"
-            target = filename
+            target = f"tap_backup/{filename}"
             thread_pool.run(download_and_upload,
                             username=jenkins.username,
                             password=jenkins.password,
@@ -70,7 +70,7 @@ def download_and_upload(**kwargs):
 
 
 if __name__ == '__main__':
-  target_bucket = 'dragonwell-test-report'
+  target_bucket = 'dragonwell'
   config_map = get_config_from_yaml('configure.yml')
   jenkins = Jenkins(config_map['jenkins']['host'], config_map['jenkins']['username'], config_map['jenkins']['password'])
   build_cause_chain = jenkins.get_build_cause_chain(os.getenv('JOB_NAME'), os.getenv('BUILD_NUMBER'))
